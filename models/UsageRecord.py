@@ -1,4 +1,4 @@
-class UsageRecord:
+class UsageRecords:
     def __init__(self, Usage_id, customer_id, Usage_type, quantity, Usage_date, duaration, destination, cost, status):
         self.Usage_id = Usage_id
         self.customer_id = customer_id

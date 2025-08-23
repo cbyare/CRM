@@ -1,26 +1,23 @@
 from flask import Flask, jsonify, request
-from model.usagerecord import UsageRecord
-from model.data import data
+from models.UsageRecord import UsageRecords
+
 app = Flask(__name__)
 
-@app.route('/')
-def hello_world():
-    customer_names_array = ['Alice', 'Bob', 'Charlie']
-    return jsonify(customer_names_array)  # Return JSON response
-@app.route('/dat')
-def hh():
-    usage_record = UsageRecord("U001", "C001", "SMS", 1, "2025-08-22", 0, "Bob", 0.10, "Completed")
-    return jsonify(usage_record.__dict__)  # assuming UsageRecord is a regular class
+usage_records = []
 
-@app.route('/create', methods=["post"])
-def create():
-    data:{
-            "name" : self.name,
-            "age" : self.age,
-            "birth" : self.birth
-        }
-    
+@app.route('/Track', methods=['POST'])
+def New_Usage():
+    data = request.get_json()
+    print(data)
 
+    usage_record = UsageRecords.from_dict(data)
+    usage_records.append(usage_record)
+
+    return jsonify(usage_record.to_dict()), 201
+
+@app.route('/Tracked', methods=['GET'])
+def get_Usage():
+    return jsonify([record.to_dict() for record in usage_records]), 200
 
 if __name__ == "__main__":
     app.run(debug=True)
