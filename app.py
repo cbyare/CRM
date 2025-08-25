@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request
 from models.UsageRecord import UsageRecords
+from api.sms import sms
 
 app = Flask(__name__)
 
@@ -12,6 +13,10 @@ def New_Usage():
 
     usage_record = UsageRecords.from_dict(data)
     usage_records.append(usage_record)
+
+    response = sms(data.get('Phone'), f"Welcome {data.get('Name')}! You have been registered successfully.", "Istaqaana")
+    print(response.get('ResponseCode'))
+    print(response['ResponseCode'])
 
     return jsonify(usage_record.to_dict()), 201
 

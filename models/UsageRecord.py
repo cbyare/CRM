@@ -1,5 +1,5 @@
 class UsageRecords:
-    def __init__(self, Usage_id, customer_id, Usage_type, quantity, Usage_date, duaration, destination, cost, status):
+    def __init__(self, Usage_id, customer_id, Usage_type, quantity, Usage_date, duaration, destination, cost, status, mobile, message):
         self.Usage_id = Usage_id
         self.customer_id = customer_id
         self.Usage_type = Usage_type
@@ -9,6 +9,8 @@ class UsageRecords:
         self.destination = destination
         self.cost = cost
         self.status = status
+        self.mobile = mobile
+        self.message = message
 
     def to_dict(self):
         return {
@@ -20,7 +22,9 @@ class UsageRecords:
             "duaration": self.duaration,
             "destination": self.destination,
             "cost": self.cost,
-            "status": self.status
+            "status": self.status,
+            "mobile": self.mobile,
+            "message": self.message
         }
 
     @classmethod
@@ -34,5 +38,7 @@ class UsageRecords:
             duaration=data.get("duaration"),
             destination=data.get("destination"),
             cost=data.get("cost"),
-            status=data.get("status")
+            status=data.get("status"),
+            mobile=data.get("mobile"),
+            message=data.get("message")
         )
