@@ -2,6 +2,7 @@ from urllib import response
 from flask import Flask, jsonify, request
 from models.customer import Customer
 from api.smsapi import send_sms
+from ussd.ussd import get_menu
 
 
 app = Flask(__name__)
@@ -71,6 +72,36 @@ def create_customer():
             'code': 500
         }
     return jsonify(customer), message['code'], message
+
+
+@app.route('/ussd', methods=['POST'])
+def get_menu_endpoint():
+    data = request.get_json()
+    ussd_string = data.get('ussdcontent')
+    print(ussd_string)
+
+
+    menu = get_menu(ussd_string)
+
+
+    requestid = data.get('requestid', '')
+    origin = data.get('mobile', '')
+    sessionid = data.get('dailogid', '')
+    end_reply = data.get('end_reply', '')
+    ussdstate = data.get('ussd_state', '')
+    shortcode = data.get('shortcode', '')
+     
+    res = {
+        'requestid': requestid,
+        'origin': origin,
+        'sessionid': sessionid,
+        'ussdstate': 'continue',
+        'shortcode': shortcode,
+        'message': menu,
+        'endreply': 'false',
+    }
+
+    return jsonify(res), 200
 
 
 if __name__ == '__main__':
