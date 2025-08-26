@@ -1,32 +1,19 @@
-from urllib import response
 from flask import Flask, jsonify, request
-from flask_sqlalchemy import SQLAlchemy
-import os
-from dotenv import load_dotenv
 from datetime import datetime
 
 from models.customer import Customer
 from api.smsapi import send_sms
 from ussd.ussd import get_menu
 
+# 🔹 NEW: import db from configs
+from configs.db import db, init_db
 
-# Load environment variables
-load_dotenv()
 
 app = Flask(__name__)
-# Database config
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_NAME = os.getenv("DB_NAME")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", 5432)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = (
-    f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-)
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+# 🔹 NEW: Initialize DB connection
+init_db(app)
 
-db = SQLAlchemy(app)
 
 # -------------------------
 # MODELS
@@ -53,19 +40,13 @@ class Subscription(db.Model):
             "updated_at": self.updated_at,
         }
 
+
 customers = []
 
-# Health check endpoint 
-@app.route('/ping')
-def test_app(): 
 
-    message = {
-        'status': 'success',
-        'message': 'app is running',
-        'code': 200
-    } 
-
-    return jsonify(message)
+# -------------------------
+# SUBSCRIPTION ENDPOINTS
+# -------------------------
 
 @app.route("/create-subscription", methods=["POST"])
 def create_subscription():
@@ -91,24 +72,42 @@ def get_subscriptions():
     subs = Subscription.query.all()
     return jsonify([s.to_dict() for s in subs])
 
-# Retrieve customer information
+
+# 🔹 NEW: Get subscription by ID
+@app.route("/subscriptions/<int:sub_id>", methods=["GET"])
+def get_subscription(sub_id):
+    sub = Subscription.query.get(sub_id)
+    if not sub:
+        return jsonify({"error": "Subscription not found"}), 404
+    return jsonify(sub.to_dict()), 200
+
+
+# 🔹 NEW: Delete subscription by ID
+@app.route("/subscriptions/<int:sub_id>", methods=["DELETE"])
+def delete_subscription(sub_id):
+    sub = Subscription.query.get(sub_id)
+    if not sub:
+        return jsonify({"error": "Subscription not found"}), 404
+
+    db.session.delete(sub)
+    db.session.commit()
+    return jsonify({"message": f"Subscription {sub_id} deleted"}), 200
+
+
+# -------------------------
+# EXISTING CUSTOMER + USSD ROUTES (UNCHANGED)
+# -------------------------
 @app.route('/customer', methods=['GET'])
 def get_customer_info():
     print(request.headers)
-
-    # customer = Customer(1, "John Doe", 30, "123 Main St", "Jane Doe", "2023-01-01",'Male',"john.doe@example.com")
     return jsonify(customers), 200
 
 
-
-# Create a new customer
 @app.route('/create', methods=['POST'])
 def create_customer():
     data = request.get_json()
     print(request.headers)
-
     print(data)
-
 
     customer = {
         'customer_id': data.get('Id'),
@@ -124,11 +123,7 @@ def create_customer():
 
     customers.append(customer)
 
-     # API CALL TO SEND SMS FOR THE NEW CUSTOMER REGISTRATION
     response = send_sms(data.get('Phone'), f"Welcome {data.get('Name')}! You have been registered successfully.", "Istaqaana")
-    print(response.get('ResponseCode'))
-    print(response['ResponseCode'])
-
 
     if response.get('ResponseCode') == '200':
         message = {
@@ -151,23 +146,14 @@ def get_menu_endpoint():
     ussd_string = data.get('ussdcontent')
     print(ussd_string)
 
-
     menu = get_menu(ussd_string)
 
-
-    requestid = data.get('requestid', '')
-    origin = data.get('mobile', '')
-    sessionid = data.get('dailogid', '')
-    end_reply = data.get('end_reply', '')
-    ussdstate = data.get('ussd_state', '')
-    shortcode = data.get('shortcode', '')
-     
     res = {
-        'requestid': requestid,
-        'origin': origin,
-        'sessionid': sessionid,
+        'requestid': data.get('requestid', ''),
+        'origin': data.get('mobile', ''),
+        'sessionid': data.get('dailogid', ''),
         'ussdstate': 'continue',
-        'shortcode': shortcode,
+        'shortcode': data.get('shortcode', ''),
         'message': menu,
         'endreply': 'false',
     }
@@ -183,4 +169,3 @@ if __name__ == '__main__':
     except Exception as e:
         print("❌ Database connection failed:", e)
     app.run()
-
