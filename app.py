@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 from datetime import datetime
 
 from models.customer import Customer
+from api.smsapi import send_sms
+from ussd.ussd import get_menu
+
 
 # Load environment variables
 load_dotenv()
@@ -54,8 +57,15 @@ customers = []
 
 # Health check endpoint 
 @app.route('/ping')
-def test_app():             
-    return "app is running"
+def test_app(): 
+
+    message = {
+        'status': 'success',
+        'message': 'app is running',
+        'code': 200
+    } 
+
+    return jsonify(message)
 
 @app.route("/create-subscription", methods=["POST"])
 def create_subscription():
@@ -84,6 +94,8 @@ def get_subscriptions():
 # Retrieve customer information
 @app.route('/customer', methods=['GET'])
 def get_customer_info():
+    print(request.headers)
+
     # customer = Customer(1, "John Doe", 30, "123 Main St", "Jane Doe", "2023-01-01",'Male',"john.doe@example.com")
     return jsonify(customers), 200
 
@@ -93,12 +105,15 @@ def get_customer_info():
 @app.route('/create', methods=['POST'])
 def create_customer():
     data = request.get_json()
+    print(request.headers)
+
     print(data)
 
 
     customer = {
         'customer_id': data.get('Id'),
         'name': data.get('Name'),
+        'phone_number': data.get('Phone'),
         'age': data.get('Age'),
         'address': data.get('Address'),
         'mother_name': data.get('MotherName'),
@@ -107,10 +122,57 @@ def create_customer():
         'email': data.get('Email')
     }
 
-
-
     customers.append(customer)
-    return jsonify(customers), 201
+
+     # API CALL TO SEND SMS FOR THE NEW CUSTOMER REGISTRATION
+    response = send_sms(data.get('Phone'), f"Welcome {data.get('Name')}! You have been registered successfully.", "Istaqaana")
+    print(response.get('ResponseCode'))
+    print(response['ResponseCode'])
+
+
+    if response.get('ResponseCode') == '200':
+        message = {
+            'status': 'success',
+            'message': 'Customer created and SMS sent successfully',
+            'code': 201
+        }
+    else:
+        message = {
+            'status': 'error',
+            'message': 'Customer created but failed to send SMS',
+            'code': 500
+        }
+    return jsonify(customer), message['code'], message
+
+
+@app.route('/ussd', methods=['POST'])
+def get_menu_endpoint():
+    data = request.get_json()
+    ussd_string = data.get('ussdcontent')
+    print(ussd_string)
+
+
+    menu = get_menu(ussd_string)
+
+
+    requestid = data.get('requestid', '')
+    origin = data.get('mobile', '')
+    sessionid = data.get('dailogid', '')
+    end_reply = data.get('end_reply', '')
+    ussdstate = data.get('ussd_state', '')
+    shortcode = data.get('shortcode', '')
+     
+    res = {
+        'requestid': requestid,
+        'origin': origin,
+        'sessionid': sessionid,
+        'ussdstate': 'continue',
+        'shortcode': shortcode,
+        'message': menu,
+        'endreply': 'false',
+    }
+
+    return jsonify(res), 200
 
 
 if __name__ == '__main__':
