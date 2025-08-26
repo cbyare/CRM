@@ -1,43 +1,113 @@
-from urllib import response
 from flask import Flask, jsonify, request
+from datetime import datetime
+
 from models.customer import Customer
 from api.smsapi import send_sms
 from ussd.ussd import get_menu
 
+# 🔹 NEW: import db from configs
+from configs.db import db, init_db
+
 
 app = Flask(__name__)
+
+# 🔹 NEW: Initialize DB connection
+init_db(app)
+
+
+# -------------------------
+# MODELS
+# -------------------------
+class Subscription(db.Model):
+    __tablename__ = "subscriptions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    customer_id = db.Column(db.Integer, nullable=False)  # Just integers
+    service_id = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(50), nullable=False)
+    plan_type = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "customer_id": self.customer_id,
+            "service_id": self.service_id,
+            "status": self.status,
+            "plan_type": self.plan_type,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+
 customers = []
 
-# Health check endpoint 
-@app.route('/ping')
-def test_app(): 
 
-    message = {
-        'status': 'success',
-        'message': 'app is running',
-        'code': 200
-    } 
+# -------------------------
+# SUBSCRIPTION ENDPOINTS
+# -------------------------
 
-    return jsonify(message)
+@app.route("/create-subscription", methods=["POST"])
+def create_subscription():
+    data = request.get_json()
+    try:
+        subscription = Subscription(
+            customer_id=data.get("customer_id", 1),
+            service_id=data.get("service_id", 1),
+            status=data.get("status", "active"),
+            plan_type=data.get("plan_type", "basic"),
+        )
 
-# Retrieve customer information
+        db.session.add(subscription)
+        db.session.commit()
+
+        return jsonify(subscription.to_dict()), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/subscriptions", methods=["GET"])
+def get_subscriptions():
+    subs = Subscription.query.all()
+    return jsonify([s.to_dict() for s in subs])
+
+
+# 🔹 NEW: Get subscription by ID
+@app.route("/subscriptions/<int:sub_id>", methods=["GET"])
+def get_subscription(sub_id):
+    sub = Subscription.query.get(sub_id)
+    if not sub:
+        return jsonify({"error": "Subscription not found"}), 404
+    return jsonify(sub.to_dict()), 200
+
+
+# 🔹 NEW: Delete subscription by ID
+@app.route("/subscriptions/<int:sub_id>", methods=["DELETE"])
+def delete_subscription(sub_id):
+    sub = Subscription.query.get(sub_id)
+    if not sub:
+        return jsonify({"error": "Subscription not found"}), 404
+
+    db.session.delete(sub)
+    db.session.commit()
+    return jsonify({"message": f"Subscription {sub_id} deleted"}), 200
+
+
+# -------------------------
+# EXISTING CUSTOMER + USSD ROUTES (UNCHANGED)
+# -------------------------
 @app.route('/customer', methods=['GET'])
 def get_customer_info():
     print(request.headers)
-
-    # customer = Customer(1, "John Doe", 30, "123 Main St", "Jane Doe", "2023-01-01",'Male',"john.doe@example.com")
     return jsonify(customers), 200
 
 
-
-# Create a new customer
 @app.route('/create', methods=['POST'])
 def create_customer():
     data = request.get_json()
     print(request.headers)
-
     print(data)
-
 
     customer = {
         'customer_id': data.get('Id'),
@@ -53,11 +123,7 @@ def create_customer():
 
     customers.append(customer)
 
-     # API CALL TO SEND SMS FOR THE NEW CUSTOMER REGISTRATION
     response = send_sms(data.get('Phone'), f"Welcome {data.get('Name')}! You have been registered successfully.", "Istaqaana")
-    print(response.get('ResponseCode'))
-    print(response['ResponseCode'])
-
 
     if response.get('ResponseCode') == '200':
         message = {
@@ -80,23 +146,14 @@ def get_menu_endpoint():
     ussd_string = data.get('ussdcontent')
     print(ussd_string)
 
-
     menu = get_menu(ussd_string)
 
-
-    requestid = data.get('requestid', '')
-    origin = data.get('mobile', '')
-    sessionid = data.get('dailogid', '')
-    end_reply = data.get('end_reply', '')
-    ussdstate = data.get('ussd_state', '')
-    shortcode = data.get('shortcode', '')
-     
     res = {
-        'requestid': requestid,
-        'origin': origin,
-        'sessionid': sessionid,
+        'requestid': data.get('requestid', ''),
+        'origin': data.get('mobile', ''),
+        'sessionid': data.get('dailogid', ''),
         'ussdstate': 'continue',
-        'shortcode': shortcode,
+        'shortcode': data.get('shortcode', ''),
         'message': menu,
         'endreply': 'false',
     }
@@ -105,5 +162,10 @@ def get_menu_endpoint():
 
 
 if __name__ == '__main__':
+    try:
+        with app.app_context():
+            db.create_all()
+        print("✅ Database connected and tables created successfully!")
+    except Exception as e:
+        print("❌ Database connection failed:", e)
     app.run()
-
