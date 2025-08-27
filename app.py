@@ -1,12 +1,14 @@
 from urllib import response
 from flask import Flask, jsonify, request
 from models.customer import Customer
+from models.transactions import Transaction
 from api.smsapi import send_sms
 from ussd.ussd import get_menu
 
 
 app = Flask(__name__)
 customers = []
+transactions = []
 
 # Health check endpoint 
 @app.route('/ping')
@@ -103,6 +105,36 @@ def get_menu_endpoint():
 
     return jsonify(res), 200
 
+# Get all transactions
+@app.route('/transactions', methods=['GET'])
+def get_transactions():
+    return jsonify([t.to_dict() for t in transactions]), 200
+
+# Create new transaction
+@app.route('/transaction', methods=['POST'])
+def create_transaction():
+    data = request.get_json()
+    print(data)
+
+    transaction = Transaction(
+        transaction_id=data.get('Id'),
+        service_id=data.get('ServiceId'),
+        customer_id=data.get('CustomerId'),
+        amount=data.get('Amount'),
+        transaction_type=data.get('TransactionType'),
+        action_user=data.get('ActionUser'),
+        status=data.get('Status'),
+        date=data.get('Date')
+    )
+
+    transactions.append(transaction)
+
+    message = {
+        'status': 'success',
+        'message': 'Transaction created successfully',
+        'code': 201
+    }
+    return jsonify(transaction.to_dict()), 201
 
 if __name__ == '__main__':
     app.run()
