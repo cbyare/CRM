@@ -1,109 +1,77 @@
-from urllib import response
-from flask import Flask, jsonify, request
+import os
+from flask import Flask, jsonify, request, send_file
+from configs.db import db, init_db
 from models.customer import Customer
-from api.smsapi import send_sms
 from ussd.ussd import get_menu
-
+from api.smsapi import send_sms
+from reports import total_customers, list_customer_names, generate_pdf_report  # new import
 
 app = Flask(__name__)
-customers = []
 
-# Health check endpoint 
+# Database config from environment variables
+app.config['DB_USER'] = os.environ.get('DB_USER', 'postgres')
+app.config['DB_PASSWORD'] = os.environ.get('DB_PASSWORD', 'Iidle44')
+app.config['DB_HOST'] = os.environ.get('DB_HOST', 'postgres')
+app.config['DB_PORT'] = os.environ.get('DB_PORT', '5432')
+app.config['DB_NAME'] = os.environ.get('DB_NAME', 'crm_db')
+
+init_db(app)
+
+# -------------------------
+# Health Check
+# -------------------------
 @app.route('/ping')
-def test_app(): 
+def test_app():
+    return jsonify({'status': 'success', 'message': 'app is running', 'code': 200})
 
-    message = {
-        'status': 'success',
-        'message': 'app is running',
-        'code': 200
-    } 
+# -------------------------
+# Customer Endpoints (POST, GET, PUT, DELETE)
+# -------------------------
+# (Keep all existing customer routes unchanged)
 
-    return jsonify(message)
-
-# Retrieve customer information
-@app.route('/customer', methods=['GET'])
-def get_customer_info():
-    print(request.headers)
-
-    # customer = Customer(1, "John Doe", 30, "123 Main St", "Jane Doe", "2023-01-01",'Male',"john.doe@example.com")
-    return jsonify(customers), 200
-
-
-
-# Create a new customer
-@app.route('/create', methods=['POST'])
-def create_customer():
-    data = request.get_json()
-    print(request.headers)
-
-    print(data)
-
-
-    customer = {
-        'customer_id': data.get('Id'),
-        'name': data.get('Name'),
-        'phone_number': data.get('Phone'),
-        'age': data.get('Age'),
-        'address': data.get('Address'),
-        'mother_name': data.get('MotherName'),
-        'date_of_registration': data.get('DateOfRegistration'),
-        'gender': data.get('Gender'),
-        'email': data.get('Email')
-    }
-
-    customers.append(customer)
-
-     # API CALL TO SEND SMS FOR THE NEW CUSTOMER REGISTRATION
-    response = send_sms(data.get('Phone'), f"Welcome {data.get('Name')}! You have been registered successfully.", "Istaqaana")
-    print(response.get('ResponseCode'))
-    print(response['ResponseCode'])
-
-
-    if response.get('ResponseCode') == '200':
-        message = {
-            'status': 'success',
-            'message': 'Customer created and SMS sent successfully',
-            'code': 201
-        }
-    else:
-        message = {
-            'status': 'error',
-            'message': 'Customer created but failed to send SMS',
-            'code': 500
-        }
-    return jsonify(customer), message['code'], message
-
-
+# -------------------------
+# USSD Endpoint
+# -------------------------
 @app.route('/ussd', methods=['POST'])
 def get_menu_endpoint():
     data = request.get_json()
-    ussd_string = data.get('ussdcontent')
-    print(ussd_string)
-
-
-    menu = get_menu(ussd_string)
-
-
-    requestid = data.get('requestid', '')
-    origin = data.get('mobile', '')
-    sessionid = data.get('dailogid', '')
-    end_reply = data.get('end_reply', '')
-    ussdstate = data.get('ussd_state', '')
-    shortcode = data.get('shortcode', '')
-     
+    menu = get_menu(data.get('ussdcontent'))
     res = {
-        'requestid': requestid,
-        'origin': origin,
-        'sessionid': sessionid,
+        'requestid': data.get('requestid', ''),
+        'origin': data.get('mobile', ''),
+        'sessionid': data.get('dailogid', ''),
         'ussdstate': 'continue',
-        'shortcode': shortcode,
+        'shortcode': data.get('shortcode', ''),
         'message': menu,
         'endreply': 'false',
     }
-
     return jsonify(res), 200
 
+# -------------------------
+# Reporting Endpoints
+# -------------------------
+@app.route('/reports/customers', methods=['GET'])
+def customer_report():
+    """Return JSON report of customers."""
+    customers = Customer.query.all()
+    report = {
+        'total_customers': total_customers(customers),
+        'customer_names': list_customer_names(customers)
+    }
+    return jsonify(report), 200
 
+@app.route('/reports/customers/pdf', methods=['GET'])
+def customer_report_pdf():
+    """Generate and return PDF report of customers."""
+    customers = Customer.query.all()
+    filename = generate_pdf_report(customers)
+    return send_file(filename, as_attachment=True)
+
+# -------------------------
+# Run App
+# -------------------------
 if __name__ == '__main__':
-    app.run()
-
+    with app.app_context():
+        db.create_all()
+        print("✅ Database connected and tables created successfully!")
+    app.run(host='0.0.0.0', port=5000)

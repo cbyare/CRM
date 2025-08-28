@@ -1,2 +1,37 @@
-env
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+
+# Flask / Django / SQLAlchemy
+instance/
+*.db
+*.sqlite3
+migrations/
+
+# Logs
+*.log
+
+# Environment variables
 .env
+
+# Docker
+*.pid
+*.sock
+.dockerignore
+
+# System files
+.DS_Store
+Thumbs.db
